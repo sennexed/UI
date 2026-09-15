@@ -1,0 +1,6 @@
+{
+  "name": "Aegis-Bot",
+  "description": "Aesthetic, futuristic Discord moderation bot dashboard featuring real-time server status, AutoMod security telemetry, and an integrated bot command chat interface.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
