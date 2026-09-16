@@ -19,6 +19,7 @@ import { playClickSound, playAlertSound } from "../utils/audio";
 interface HeaderProps {
   telemetry: BotStatusTelemetry | null;
   onToggleRaidMode: () => void;
+  onToggleAiMod: () => void;
   onSimulateRaid: () => void;
   onPurgeRecent: () => void;
   soundOn: boolean;
@@ -37,6 +38,7 @@ const SERVERS = [
 export const Header: React.FC<HeaderProps> = ({
   telemetry,
   onToggleRaidMode,
+  onToggleAiMod,
   onSimulateRaid,
   onPurgeRecent,
   soundOn,
@@ -46,6 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const isRaid = telemetry?.raidMode ?? false;
+  const isAiMod = telemetry?.aiModEnabled ?? true;
 
   return (
     <header
@@ -75,7 +78,9 @@ export const Header: React.FC<HeaderProps> = ({
                   {telemetry?.pingMs ?? 19}ms Shard Ping
                 </span>
                 <span className="text-slate-600">•</span>
-                <span className="text-slate-400">All Shards Operational</span>
+                <span className="text-slate-400">
+                  {isAiMod ? "Gemini 3.5 Flash AI AutoMod" : "Traditional Pattern AutoMod"}
+                </span>
               </div>
             </div>
           </div>
@@ -125,8 +130,30 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Right: Anti-Raid Panic Switch & Quick Actions */}
+        {/* Right: AI Mode Toggle, Anti-Raid Panic Switch & Quick Actions */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* AI AutoMod Toggle Button */}
+          <button
+            id="toggle-aimod-btn"
+            onClick={() => {
+              playClickSound();
+              onToggleAiMod();
+            }}
+            title={
+              isAiMod
+                ? "AI AutoMod is ON (Gemini 3.5 Flash + Failover). Click to switch to Traditional AutoMod."
+                : "AI AutoMod is OFF (Traditional Regex AutoMod active). Click to activate AI mode."
+            }
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide border flex items-center gap-1.5 transition-all cursor-pointer ${
+              isAiMod
+                ? "bg-cyan-950/70 border-cyan-500/50 text-cyan-200 hover:bg-cyan-900/80 shadow-sm"
+                : "bg-amber-950/60 border-amber-500/50 text-amber-200 hover:bg-amber-900/80 shadow-sm"
+            }`}
+          >
+            <Zap className={`w-3.5 h-3.5 ${isAiMod ? "text-cyan-400" : "text-amber-400"}`} />
+            <span>{isAiMod ? "AI MOD: ON (Gemini)" : "AUTO MOD: TRADITIONAL"}</span>
+          </button>
+
           {/* Anti-Raid Panic Button */}
           <button
             onClick={() => {

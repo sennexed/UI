@@ -153,6 +153,46 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchTelemetry]);
 
+  // Toggle AI Mod Mode
+  const handleToggleAiMod = async () => {
+    try {
+      const res = await fetch("/api/bot/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: "TOGGLE_AI_MOD" }),
+      });
+      const data = await res.json();
+      if (data.success && data.state) {
+        setTelemetry(data.state);
+        const isAi = data.state.aiModEnabled;
+        const msg: DiscordChatMessage = {
+          id: `cmd-${Date.now()}`,
+          sender: "aegis",
+          authorName: "Aegis",
+          isBot: true,
+          timestamp: "Just now",
+          content: "",
+          embed: {
+            color: isAi ? "#06b6d4" : "#f59e0b",
+            title: isAi ? "🤖 AI AutoMod ACTIVATED" : "🛡️ Traditional AutoMod ENGAGED",
+            description: isAi
+              ? "Messages will now be inspected with **Gemini 3.5 Flash** (real-time). If AI service fails or times out, **Traditional AutoMod** automatically failovers."
+              : "AI mode disabled. **Traditional AutoMod** (Regex, Patterns & Blacklists) is actively protecting the server.",
+            fields: [
+              { name: "Active Mode", value: isAi ? "Gemini 3.5 Flash AI" : "Traditional Pattern Engine", inline: true },
+              { name: "Failover Fallback", value: "Standby / Enabled", inline: true },
+              { name: "Server", value: selectedGuild, inline: true },
+            ],
+            footer: { text: "Toggled via Dashboard Control Panel" },
+          },
+        };
+        setMessages((prev) => [...prev, msg]);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Toggle Raid Mode
   const handleToggleRaidMode = async () => {
     try {
@@ -473,6 +513,7 @@ export default function App() {
       <Header
         telemetry={telemetry}
         onToggleRaidMode={handleToggleRaidMode}
+        onToggleAiMod={handleToggleAiMod}
         onSimulateRaid={handleSimulateRaid}
         onPurgeRecent={handlePurgeRecent}
         soundOn={soundOn}
@@ -580,6 +621,7 @@ export default function App() {
                   telemetry={telemetry}
                   modLogs={modLogs}
                   onToggleRule={handleToggleRule}
+                  onToggleAiMod={handleToggleAiMod}
                   onClearLogs={() => setModLogs([])}
                   onSelectLog={(log) => setSelectedLog(log)}
                   selectedGuild={selectedGuild}
@@ -606,6 +648,7 @@ export default function App() {
               telemetry={telemetry}
               modLogs={modLogs}
               onToggleRule={handleToggleRule}
+              onToggleAiMod={handleToggleAiMod}
               onClearLogs={() => setModLogs([])}
               onSelectLog={(log) => setSelectedLog(log)}
               selectedGuild={selectedGuild}

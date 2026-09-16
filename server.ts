@@ -46,6 +46,9 @@ interface BotTelemetry {
   memoryUsageMb: number;
   memoryMaxMb: number;
   raidMode: boolean;
+  aiModEnabled: boolean;
+  traditionalAutoModFallback: boolean;
+  activeModeDescription?: string;
   geminiModel: string;
   moderationModel: string;
   claudeModel?: string;
@@ -78,6 +81,9 @@ const botState: BotTelemetry = {
   memoryUsageMb: 184,
   memoryMaxMb: 512,
   raidMode: false,
+  aiModEnabled: true, // Master toggle for Gemini 3.5 Flash AI AutoMod
+  traditionalAutoModFallback: true, // Auto-engages if AI mod is toggled off or if AI API encounters an error/timeout
+  activeModeDescription: "Hybrid (Gemini 3.5 Flash AI AutoMod primary + Traditional AutoMod fallback)",
   geminiModel: "Google Gemini (Max 150 words)",
   moderationModel: "Gemini 3.5 Flash",
   claudeModel: "Gemini 3.5 Flash",
@@ -213,7 +219,16 @@ Return strictly valid JSON matching this schema:
     }
   }
 
-  // High-Precision Gemini 3.5 Flash Heuristic Classifier (Instant Zero-Latency Fallback)
+  // If Gemini API is unavailable or models failed, throw error to trigger Traditional AutoMod fallback
+  throw new Error("Gemini AI Moderation service unavailable or timed out");
+}
+
+// --- TRADITIONAL AUTOMOD ENGINE (Regex, Pattern, Heuristic & Keyword Engine) ---
+function runTraditionalAutoMod(
+  text: string,
+  author = "ServerMember",
+  channel = "general"
+): ModerationAssessment {
   const lower = text.toLowerCase();
 
   // Phishing / Scam detection
@@ -243,7 +258,7 @@ Return strictly valid JSON matching this schema:
 
   // Spam
   const isSpam =
-    text.length > 350 && (text.match(/(!|\?|\.){3,}/g)?.length || 0) > 3 ||
+    (text.length > 350 && (text.match(/(!|\?|\.){3,}/g)?.length || 0) > 3) ||
     (lower.match(/@everyone/g) || []).length >= 2 ||
     /(\b\w+\b)( \1){4,}/i.test(text);
 
@@ -257,7 +272,7 @@ Return strictly valid JSON matching this schema:
       ruleBreached: "Rule #1: Malicious Phishing, Credential Theft & Fake Nitro",
       flaggedKeywords: ["fake-nitro", "token grabber", "credential theft link"],
       evidenceSnippet: text.slice(0, 140),
-      moderationEngine: "Gemini 3.5 Flash",
+      moderationEngine: "Traditional AutoMod (Regex / Pattern Filter)",
     };
   }
 
@@ -271,7 +286,7 @@ Return strictly valid JSON matching this schema:
       ruleBreached: "Rule #2: Zero Tolerance for Severe Harassment, Toxicity & Hate Speech",
       flaggedKeywords: ["targeted insult", "harassment pattern"],
       evidenceSnippet: text.slice(0, 140),
-      moderationEngine: "Gemini 3.5 Flash",
+      moderationEngine: "Traditional AutoMod (Regex / Pattern Filter)",
     };
   }
 
@@ -285,7 +300,7 @@ Return strictly valid JSON matching this schema:
       ruleBreached: "Rule #3: Unauthorized Discord Server Advertising & Link Egress",
       flaggedKeywords: ["discord.gg invite link"],
       evidenceSnippet: text.slice(0, 140),
-      moderationEngine: "Gemini 3.5 Flash",
+      moderationEngine: "Traditional AutoMod (Regex / Pattern Filter)",
     };
   }
 
@@ -299,7 +314,7 @@ Return strictly valid JSON matching this schema:
       ruleBreached: "Rule #4: Rapid-Fire Spamming, Repetition & Mass-Pings",
       flaggedKeywords: ["repeated characters", "mass ping"],
       evidenceSnippet: text.slice(0, 140),
-      moderationEngine: "Gemini 3.5 Flash",
+      moderationEngine: "Traditional AutoMod (Regex / Pattern Filter)",
     };
   }
 
@@ -312,8 +327,33 @@ Return strictly valid JSON matching this schema:
     ruleBreached: "None (Clean communication)",
     flaggedKeywords: [],
     evidenceSnippet: text.slice(0, 80),
-    moderationEngine: "Gemini 3.5 Flash",
+    moderationEngine: "Traditional AutoMod (Regex / Pattern Filter)",
   };
+}
+
+// Master Moderation Pipeline supporting AI toggle & seamless Traditional AutoMod fallback
+async function executeModerationPipeline(
+  text: string,
+  author = "ServerMember",
+  channel = "general"
+): Promise<{ assessment: ModerationAssessment; modeUsed: "AI_MOD" | "TRADITIONAL_FALLBACK" | "TRADITIONAL_STANDALONE" }> {
+  // Case 1: AI AutoMod is toggled OFF by user -> Immediately run Traditional AutoMod
+  if (!botState.aiModEnabled) {
+    const assessment = runTraditionalAutoMod(text, author, channel);
+    return { assessment, modeUsed: "TRADITIONAL_STANDALONE" };
+  }
+
+  // Case 2: AI AutoMod is ON -> Attempt Gemini 3.5 Flash evaluation
+  try {
+    const aiAssessment = await runGeminiModeration(text, author, channel);
+    return { assessment: aiAssessment, modeUsed: "AI_MOD" };
+  } catch (err) {
+    console.warn("AI AutoMod failed or timed out. Auto-engaging Traditional AutoMod fallback:", err);
+    // Case 3: AI AutoMod failed -> Automatic failover to Traditional AutoMod
+    const fallbackAssessment = runTraditionalAutoMod(text, author, channel);
+    fallbackAssessment.moderationEngine = "Traditional AutoMod (Failover Engaged)";
+    return { assessment: fallbackAssessment, modeUsed: "TRADITIONAL_FALLBACK" };
+  }
 }
 
 // Backwards compatibility alias
@@ -419,28 +459,29 @@ app.post("/api/bot/moderate", async (req, res) => {
     return res.status(400).json({ error: "Missing text to moderate." });
   }
 
-  // 1. Evaluate with Gemini 3.5 Flash
-  const geminiAssessment = await runGeminiModeration(text, author, channel);
+  // 1. Evaluate with Master Moderation Pipeline (AI with automatic Traditional failover or Traditional standalone)
+  const { assessment: moderationAssessment, modeUsed } = await executeModerationPipeline(text, author, channel);
 
   // 2. Summarize crime with Google Gemini (word cap = 150)
-  const geminiSummary = await runGeminiCrimeSummary(text, geminiAssessment, author, channel);
+  const geminiSummary = await runGeminiCrimeSummary(text, moderationAssessment, author, channel);
 
-  if (geminiAssessment.isViolation) {
+  if (moderationAssessment.isViolation) {
     botState.infractionsToday += 1;
-    const rule = botState.activeRules.find((r) => r.category === geminiAssessment.violationCategory);
+    const rule = botState.activeRules.find((r) => r.category === moderationAssessment.violationCategory);
     if (rule) rule.triggerCount += 1;
   }
 
   return res.json({
-    isViolation: geminiAssessment.isViolation,
-    violationCategory: geminiAssessment.violationCategory,
-    severity: geminiAssessment.severity,
-    riskScore: geminiAssessment.riskScore,
-    recommendedAction: geminiAssessment.recommendedAction,
-    moderationEngine: geminiAssessment.moderationEngine,
-    ruleBreached: geminiAssessment.ruleBreached,
-    flaggedKeywords: geminiAssessment.flaggedKeywords,
-    evidenceSnippet: geminiAssessment.evidenceSnippet,
+    isViolation: moderationAssessment.isViolation,
+    violationCategory: moderationAssessment.violationCategory,
+    severity: moderationAssessment.severity,
+    riskScore: moderationAssessment.riskScore,
+    recommendedAction: moderationAssessment.recommendedAction,
+    moderationEngine: moderationAssessment.moderationEngine,
+    modeUsed,
+    ruleBreached: moderationAssessment.ruleBreached,
+    flaggedKeywords: moderationAssessment.flaggedKeywords,
+    evidenceSnippet: moderationAssessment.evidenceSnippet,
     crimeSummary: geminiSummary.summary,
     crimeSummaryWordCount: geminiSummary.wordCount,
     summarizerEngine: "Google Gemini (Max 150 words)",
@@ -452,6 +493,20 @@ app.post("/api/bot/command", (req, res) => {
   const { command, payload } = req.body;
 
   switch (command) {
+    case "TOGGLE_AI_MOD": {
+      botState.aiModEnabled = !botState.aiModEnabled;
+      botState.activeModeDescription = botState.aiModEnabled
+        ? "AI Mode Enabled (Gemini 3.5 Flash primary + Traditional AutoMod failover fallback)"
+        : "Traditional AutoMod Standalone (Regex / Pattern / Heuristic engine active)";
+      return res.json({
+        success: true,
+        message: botState.aiModEnabled
+          ? "🤖 **AI AutoMod Enabled**: Messages are now inspected in real-time by **Gemini 3.5 Flash** (with instant Traditional AutoMod failover)."
+          : "🛡️ **Traditional AutoMod Engaged**: AI scanning disabled. Rules are enforced via **Traditional Regex & Pattern Engine**.",
+        state: botState,
+      });
+    }
+
     case "TOGGLE_RAID_MODE": {
       botState.raidMode = !botState.raidMode;
       return res.json({
@@ -540,19 +595,55 @@ app.post("/api/chat", async (req, res) => {
       });
     }
 
+    if (cmd.startsWith("/aimod")) {
+      botState.aiModEnabled = !botState.aiModEnabled;
+      botState.activeModeDescription = botState.aiModEnabled
+        ? "AI Mode Enabled (Gemini 3.5 Flash primary + Traditional AutoMod failover fallback)"
+        : "Traditional AutoMod Standalone (Regex / Pattern / Heuristic engine active)";
+      return res.json({
+        content: "",
+        embed: {
+          color: botState.aiModEnabled ? "#06b6d4" : "#f59e0b",
+          title: botState.aiModEnabled ? "🤖 AI AutoMod ACTIVATED" : "🛡️ Traditional AutoMod ENGAGED",
+          description: botState.aiModEnabled
+            ? "**Gemini 3.5 Flash** is now inspecting messages in real time. If the AI model times out or encounters an error, **Traditional AutoMod** automatically failovers."
+            : "AI scanning has been **disabled**. Server messages are now guarded exclusively by **Traditional Regex, Pattern & Heuristic AutoMod**.",
+          fields: [
+            { name: "Current Engine", value: botState.aiModEnabled ? "Gemini 3.5 Flash (AI)" : "Traditional Pattern Engine", inline: true },
+            { name: "Failover Fallback", value: "Always Standby", inline: true },
+            { name: "Status", value: "Active", inline: true },
+          ],
+          footer: { text: "Toggle with /aimod or via Dashboard Controls" },
+        },
+        botState,
+      });
+    }
+
     if (cmd.startsWith("/automod") || cmd.includes("rules")) {
       return res.json({
         content: "",
         embed: {
           color: "#10b981",
-          title: "⚙️ AutoMod Configuration & Multi-Model Engine",
-          description: "All messages are actively evaluated by **Gemini 3.5 Flash** (moderation sanction) and summarized by **Google Gemini** (≤150 words crime forensic report).",
-          fields: botState.activeRules.map((rule) => ({
-            name: `${rule.enabled ? "✅" : "❌"} ${rule.name}`,
-            value: `Action: \`${rule.action}\` • Triggered: \`${rule.triggerCount} times\``,
-            inline: false,
-          })),
-          footer: { text: "Use /testmod [message] to test the dual AI moderation pipeline." },
+          title: "⚙️ AutoMod Configuration & Engine Status",
+          description: `**Operational Mode:** ${botState.aiModEnabled ? "🤖 **AI AutoMod (Gemini 3.5 Flash)** with Traditional failover" : "🛡️ **Traditional AutoMod (Regex / Patterns)**"}\nCrime Forensic Summaries: **Google Gemini (≤150w)**.`,
+          fields: [
+            {
+              name: "⚡ AI Mode Toggle",
+              value: botState.aiModEnabled ? "✅ **ON** (Gemini 3.5 Flash active)" : "❌ **OFF** (Traditional AutoMod running)",
+              inline: true,
+            },
+            {
+              name: "🛡️ Traditional Fallback",
+              value: "✅ **ACTIVE** (Zero-latency standby)",
+              inline: true,
+            },
+            ...botState.activeRules.map((rule) => ({
+              name: `${rule.enabled ? "✅" : "❌"} ${rule.name}`,
+              value: `Action: \`${rule.action}\` • Triggered: \`${rule.triggerCount} times\``,
+              inline: false,
+            })),
+          ],
+          footer: { text: "Use /aimod to toggle AI mode, or /testmod [message] to test." },
         },
         botState,
       });
@@ -629,35 +720,43 @@ app.post("/api/chat", async (req, res) => {
     }
   }
 
-  // 2. LIVE AI AUTOMOD PIPELINE (Gemini 3.5 Flash Moderation + Google Gemini Crime Summary)
-  const geminiAssessment = await runGeminiModeration(query, author, channel);
+  // 2. LIVE DUAL-ENGINE AUTOMOD PIPELINE (Gemini 3.5 Flash AI AutoMod with Traditional AutoMod failover & standalone)
+  const { assessment: moderationAssessment, modeUsed } = await executeModerationPipeline(query, author, channel);
 
-  if (geminiAssessment.isViolation) {
+  if (moderationAssessment.isViolation) {
     botState.infractionsToday += 1;
 
     // Run Google Gemini Crime Summarizer (strictly <=150 words)
-    const geminiSummary = await runGeminiCrimeSummary(query, geminiAssessment, author, channel);
+    const geminiSummary = await runGeminiCrimeSummary(query, moderationAssessment, author, channel);
 
     const embedColor =
-      geminiAssessment.severity === "CRITICAL"
+      moderationAssessment.severity === "CRITICAL"
         ? "#ef4444"
-        : geminiAssessment.severity === "HIGH"
+        : moderationAssessment.severity === "HIGH"
         ? "#f97316"
         : "#eab308";
+
+    const engineLabel =
+      modeUsed === "AI_MOD"
+        ? "Gemini 3.5 Flash (AI Engine)"
+        : modeUsed === "TRADITIONAL_FALLBACK"
+        ? "Traditional AutoMod (Failover Engaged)"
+        : "Traditional AutoMod (Pattern Engine)";
 
     return res.json({
       content: `⚠️ **AutoMod Intercept**: A message from **@${author}** violated server rules and was blocked.`,
       isFlagged: true,
       moderationResult: {
-        ...geminiAssessment,
+        ...moderationAssessment,
+        modeUsed,
         crimeSummary: geminiSummary.summary,
         crimeSummaryWordCount: geminiSummary.wordCount,
         summarizerEngine: "Google Gemini (Max 150 words)",
       },
       embed: {
         color: embedColor,
-        title: `🛡️ AutoMod Sanction: [${geminiAssessment.recommendedAction.replace("_", " ")}]`,
-        description: `**Moderation Assessment by Gemini 3.5 Flash:**\n${geminiAssessment.ruleBreached} • Risk Score: **${geminiAssessment.riskScore}/100** [${geminiAssessment.severity}]`,
+        title: `🛡️ AutoMod Sanction: [${moderationAssessment.recommendedAction.replace("_", " ")}]`,
+        description: `**Enforcement Engine:** \`${engineLabel}\`\n${moderationAssessment.ruleBreached} • Risk Score: **${moderationAssessment.riskScore}/100** [${moderationAssessment.severity}]`,
         fields: [
           {
             name: `📝 Crime Summary (by Google Gemini • ${geminiSummary.wordCount} words / 150 max)`,
@@ -665,16 +764,16 @@ app.post("/api/chat", async (req, res) => {
             inline: false,
           },
           { name: "👤 Offending Member", value: `@${author}`, inline: true },
-          { name: "⚖️ Enforced Action", value: `\`${geminiAssessment.recommendedAction}\``, inline: true },
+          { name: "⚖️ Enforced Action", value: `\`${moderationAssessment.recommendedAction}\``, inline: true },
           { name: "📁 Channel", value: `#${channel}`, inline: true },
           {
             name: "🔍 Blocked Message Snippet",
-            value: `\`${geminiAssessment.evidenceSnippet || query.slice(0, 100)}\``,
+            value: `\`${moderationAssessment.evidenceSnippet || query.slice(0, 100)}\``,
             inline: false,
           },
         ],
         footer: {
-          text: `Aegis AutoMod • Evaluated by Gemini 3.5 Flash • Summarized by Google Gemini`,
+          text: `Aegis AutoMod • Evaluated by ${engineLabel} • Summarized by Google Gemini`,
         },
       },
       botState,

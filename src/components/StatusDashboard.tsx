@@ -27,6 +27,7 @@ interface StatusDashboardProps {
   telemetry: BotStatusTelemetry | null;
   modLogs: ModLogItem[];
   onToggleRule: (ruleId: string) => void;
+  onToggleAiMod?: () => void;
   onClearLogs: () => void;
   onSelectLog: (log: ModLogItem) => void;
   selectedGuild: string;
@@ -36,6 +37,7 @@ export const StatusDashboard: React.FC<StatusDashboardProps> = ({
   telemetry,
   modLogs,
   onToggleRule,
+  onToggleAiMod,
   onClearLogs,
   onSelectLog,
   selectedGuild,
@@ -44,6 +46,8 @@ export const StatusDashboard: React.FC<StatusDashboardProps> = ({
   const [eventHistory, setEventHistory] = useState<number[]>([
     3950, 4120, 4080, 4220, 4180, 4290, 4210, 4340, 4250, 4310, 4280, 4400, 4320, 4210,
   ]);
+
+  const isAiMod = telemetry?.aiModEnabled ?? true;
 
   useEffect(() => {
     if (!telemetry) return;
@@ -57,36 +61,65 @@ export const StatusDashboard: React.FC<StatusDashboardProps> = ({
 
   return (
     <div id="aegis-status-dashboard" className="space-y-4">
-      {/* Multi-Model AI Moderation Banner */}
+      {/* Dual-Engine AutoMod Mode Banner & Master Toggle */}
       <div className="p-3.5 rounded-2xl bg-gradient-to-r from-[#17142b] via-[#121626] to-[#0f1b26] border border-slate-700/80 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-[#5865F2]/20 text-[#5865F2] flex-shrink-0">
+          <div className={`p-2 rounded-xl flex-shrink-0 ${isAiMod ? "bg-cyan-500/20 text-cyan-400" : "bg-amber-500/20 text-amber-400"}`}>
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h4 className="text-xs font-bold text-white tracking-wide uppercase">
-                Active Multi-Model AutoMod Pipeline
+                {isAiMod ? "AI AutoMod: Gemini 3.5 Flash Active" : "Traditional AutoMod Standalone Active"}
               </h4>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/40">
-                ENGAGED
+              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded border ${
+                isAiMod
+                  ? "bg-cyan-950 text-cyan-300 border-cyan-500/40"
+                  : "bg-amber-950 text-amber-300 border-amber-500/40"
+              }`}>
+                {isAiMod ? "AI + FAILOVER READY" : "TRADITIONAL MODE"}
               </span>
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              Every message is moderated by <strong>Gemini 3.5 Flash</strong> and crime incidents are summarized by <strong>Google Gemini</strong> (≤150 words).
+              {isAiMod
+                ? "Scans messages via Gemini 3.5 Flash. If AI model fails or times out, Traditional AutoMod instantly takes over."
+                : "AI moderation is paused. Traditional Regex, Pattern & Word Blacklists actively enforce all channel safety rules."}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs">
-          <div className="px-2.5 py-1 rounded-lg bg-cyan-950/70 border border-cyan-500/40 text-cyan-200 text-[11px] font-medium flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-            <span>Gemini 3.5 Flash (Moderation)</span>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {/* Engine Status Badges */}
+          <div className={`px-2.5 py-1 rounded-lg border text-[11px] font-medium flex items-center gap-1.5 ${
+            isAiMod
+              ? "bg-cyan-950/70 border-cyan-500/40 text-cyan-200"
+              : "bg-slate-900 border-slate-800 text-slate-400 opacity-60"
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isAiMod ? "bg-cyan-400" : "bg-slate-500"}`} />
+            <span>AI Moderation (Gemini 3.5 Flash)</span>
           </div>
-          <div className="px-2.5 py-1 rounded-lg bg-sky-950/70 border border-sky-500/40 text-sky-200 text-[11px] font-medium flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-            <span>Google Gemini (≤150w Summary)</span>
+
+          <div className="px-2.5 py-1 rounded-lg bg-emerald-950/70 border border-emerald-500/40 text-emerald-200 text-[11px] font-medium flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span>Traditional Failover (Regex / Standby)</span>
           </div>
+
+          {/* Interactive AI Toggle in Dashboard */}
+          {onToggleAiMod && (
+            <button
+              onClick={() => {
+                playClickSound();
+                onToggleAiMod();
+              }}
+              className={`px-3 py-1 rounded-lg font-semibold text-xs border transition-all cursor-pointer flex items-center gap-1.5 ${
+                isAiMod
+                  ? "bg-cyan-600 hover:bg-cyan-500 text-white border-cyan-400 shadow-sm"
+                  : "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-600"
+              }`}
+            >
+              <span>AI Mode: {isAiMod ? "ON" : "OFF"}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -252,7 +285,12 @@ export const StatusDashboard: React.FC<StatusDashboardProps> = ({
           </div>
 
           <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-            <span>Filter Engine: Gemini 3.5 Flash + Gemini</span>
+            <span>
+              Engine: <strong className={isAiMod ? "text-cyan-400" : "text-amber-400"}>
+                {isAiMod ? "Gemini 3.5 Flash (AI)" : "Traditional Regex / Heuristic"}
+              </strong>
+              {isAiMod && <span className="text-slate-500 ml-1.5">• Failover: Traditional AutoMod</span>}
+            </span>
             <span className="text-emerald-400 font-medium">All 5 Filters Operational</span>
           </div>
         </div>

@@ -364,7 +364,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </div>
 
         <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1 px-1">
-          <span>AI Pipeline: Claude 3.5 Sonnet (Moderation) + Google Gemini (Crime Summary ≤150w)</span>
+          <span>AI Pipeline: Gemini 3.5 Flash (AI Mod) + Traditional Fallback + Google Gemini (Crime Summary ≤150w)</span>
           <span>Aegis AutoMod Core</span>
         </div>
       </form>

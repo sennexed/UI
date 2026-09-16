@@ -267,15 +267,27 @@ export const AIAutoModLab: React.FC<AIAutoModLabProps> = ({
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-            {/* Panel 1: Gemini 3.5 Flash Moderation Decision (5 cols) */}
+            {/* Panel 1: Moderation Decision (Gemini 3.5 Flash or Traditional Fallback) (5 cols) */}
             <div className="lg:col-span-5 p-4 rounded-xl bg-[#14232c] border border-cyan-500/30 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
-                  <span className="text-xs font-bold text-cyan-200">Gemini 3.5 Flash</span>
+                  <span className={`w-2.5 h-2.5 rounded-full ${scanResult.modeUsed === "TRADITIONAL_FALLBACK" || scanResult.modeUsed === "TRADITIONAL_STANDALONE" ? "bg-amber-400" : "bg-cyan-400"}`} />
+                  <span className="text-xs font-bold text-cyan-200">
+                    {scanResult.moderationEngine || "Gemini 3.5 Flash"}
+                  </span>
                 </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/30">
-                  Moderator Logic
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                  scanResult.modeUsed === "TRADITIONAL_FALLBACK"
+                    ? "bg-amber-950 text-amber-300 border-amber-500/40"
+                    : scanResult.modeUsed === "TRADITIONAL_STANDALONE"
+                    ? "bg-slate-900 text-slate-300 border-slate-700"
+                    : "bg-cyan-950 text-cyan-300 border-cyan-500/30"
+                }`}>
+                  {scanResult.modeUsed === "TRADITIONAL_FALLBACK"
+                    ? "Failover Engaged"
+                    : scanResult.modeUsed === "TRADITIONAL_STANDALONE"
+                    ? "Traditional AutoMod"
+                    : "AI Mode Active"}
                 </span>
               </div>
 

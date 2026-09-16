@@ -9,6 +9,9 @@ export interface BotStatusTelemetry {
   memoryUsageMb: number;
   memoryMaxMb: number;
   raidMode: boolean;
+  aiModEnabled: boolean; // Master toggle for Gemini 3.5 Flash AI AutoMod
+  traditionalAutoModFallback: boolean; // Fallback or secondary filter for Regex/Keyword/Heuristic rules
+  activeModeDescription?: string;
   shards: BotShard[];
   activeRules: AutoModRule[];
   geminiModel: string;
