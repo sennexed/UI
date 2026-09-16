@@ -8,10 +8,12 @@ import { Header } from "./components/Header";
 import { StatusDashboard } from "./components/StatusDashboard";
 import { ChatInterface } from "./components/ChatInterface";
 import { LogDetailModal } from "./components/LogDetailModal";
+import { AIAutoModLab } from "./components/AIAutoModLab";
 import {
   BotStatusTelemetry,
   ModLogItem,
   DiscordChatMessage,
+  AIModerationResult,
 } from "./types";
 import {
   setSoundEnabled,
@@ -19,7 +21,7 @@ import {
   playAlertSound,
   playClickSound,
 } from "./utils/audio";
-import { LayoutDashboard, MessageSquare, Layers, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, MessageSquare, Layers, ShieldCheck, Sparkles } from "lucide-react";
 
 const INITIAL_LOGS: ModLogItem[] = [
   {
@@ -27,54 +29,75 @@ const INITIAL_LOGS: ModLogItem[] = [
     timestamp: "2 mins ago",
     actionType: "AUTOMOD_BLOCK",
     targetUser: { username: "crypto_drop", discriminator: "8912" },
-    moderator: { username: "Aegis AutoMod", isBot: true },
+    moderator: { username: "Aegis AutoMod (Gemini 3.5 Flash)", isBot: true },
     channel: "general",
-    reason: "Malicious Phishing URL detected (Blacklist match: fake-nitro-claim.xyz)",
+    reason: "Rule #1: Malicious Phishing, Credential Theft & Fake Nitro",
     details: "Click here for free Discord Nitro 3 months: http://fake-nitro-claim.xyz/gift",
     severity: "CRITICAL",
+    aiAudit: {
+      isViolation: true,
+      violationCategory: "ANTI_PHISHING",
+      severity: "CRITICAL",
+      riskScore: 98,
+      recommendedAction: "PERM_BAN",
+      moderationEngine: "Gemini 3.5 Flash",
+      ruleBreached: "Rule #1: Malicious Phishing & Fake Nitro Credential Harvester",
+      flaggedKeywords: ["fake-nitro", "token grabber"],
+      evidenceSnippet: "http://fake-nitro-claim.xyz/gift",
+      crimeSummary: "Incident Report: Member @crypto_drop distributed a deceptive URL advertising fraudulent Discord Nitro incentives. The linked domain impersonates official Discord billing endpoints to harvest authorization tokens and exfiltrate browser credentials. This threat pattern risks automated account compromise across the server. In accordance with Rule #1, AutoMod deleted the payload and applied a permanent ban.",
+      crimeSummaryWordCount: 56,
+      summarizerEngine: "Google Gemini (Max 150 words)",
+    },
   },
   {
     id: "log-102",
     timestamp: "14 mins ago",
     actionType: "MUTE",
     targetUser: { username: "toxic_raider", discriminator: "3310" },
-    moderator: { username: "ModSarah", isBot: false },
+    moderator: { username: "Aegis AutoMod (Gemini 3.5 Flash)", isBot: true },
     channel: "lounge",
-    reason: "Rule #2: Severe Harassment & Hate Speech (Timed out for 1 hour)",
-    details: "Multiple repeated targeted insults after moderator warning",
+    reason: "Rule #2: Zero Tolerance for Severe Harassment, Toxicity & Hate Speech",
+    details: "kys you absolute idiot go uninstall life right now nobody wants you here",
     severity: "HIGH",
+    aiAudit: {
+      isViolation: true,
+      violationCategory: "TOXICITY_HARASSMENT",
+      severity: "HIGH",
+      riskScore: 88,
+      recommendedAction: "TIMEOUT_10M",
+      moderationEngine: "Gemini 3.5 Flash",
+      ruleBreached: "Rule #2: Severe Toxicity, Self-Harm Encouragement & Harassment",
+      flaggedKeywords: ["kys", "harassment pattern"],
+      evidenceSnippet: "kys you absolute idiot go uninstall life right now",
+      crimeSummary: "Incident Report: Member @toxic_raider directed explicit personal attacks and self-harm incitement toward community members in #lounge. Gemini 3.5 Flash classified this language as severe harassment violating Discord Community Safety standards. The conduct causes immediate hostility and community intimidation. AutoMod purged the offending message and enacted an automated timeout under Rule #2.",
+      crimeSummaryWordCount: 53,
+      summarizerEngine: "Google Gemini (Max 150 words)",
+    },
   },
   {
     id: "log-103",
     timestamp: "32 mins ago",
     actionType: "AUTOMOD_BLOCK",
     targetUser: { username: "promoter_bot", discriminator: "1104" },
-    moderator: { username: "Aegis AutoMod", isBot: true },
+    moderator: { username: "Aegis AutoMod (Gemini 3.5 Flash)", isBot: true },
     channel: "media-share",
-    reason: "Unauthorized Discord Server Invite (discord.gg/free-stuff)",
+    reason: "Rule #3: Unauthorized Discord Server Advertising & Link Egress",
     details: "Join my new server guys: discord.gg/free-stuff unlimited giveaways",
     severity: "MEDIUM",
-  },
-  {
-    id: "log-104",
-    timestamp: "1 hour ago",
-    actionType: "RAID_MITIGATION",
-    targetUser: { username: "selfbot_batch_04", discriminator: "0019" },
-    moderator: { username: "Aegis Anti-Raid", isBot: true },
-    channel: "welcome",
-    reason: "Burst Join Spike: 14 accounts joined in 2.8 seconds with identical creation dates",
-    details: "Automated Quarantine applied. Captcha verification dispatched.",
-    severity: "CRITICAL",
-  },
-  {
-    id: "log-105",
-    timestamp: "2 hours ago",
-    actionType: "PURGE",
-    targetUser: { username: "spambot_army", discriminator: "9900" },
-    moderator: { username: "AdminAlex", isBot: false },
-    channel: "bot-commands",
-    reason: "Bulk message purge (50 spam messages cleared)",
-    severity: "LOW",
+    aiAudit: {
+      isViolation: true,
+      violationCategory: "INVITE_LINK",
+      severity: "MEDIUM",
+      riskScore: 65,
+      recommendedAction: "DELETE_AND_WARN",
+      moderationEngine: "Gemini 3.5 Flash",
+      ruleBreached: "Rule #3: Unauthorized Discord Invite Promotion",
+      flaggedKeywords: ["discord.gg invite link"],
+      evidenceSnippet: "discord.gg/free-stuff unlimited giveaways",
+      crimeSummary: "Incident Report: Member @promoter_bot posted an unsolicited third-party Discord invite in #media-share without server authorization. Unauthorized link promotion creates channel clutter and routes members to unverified external guilds. Under Rule #3, AutoMod intercepted and removed the invite link, dispatching an automated warning.",
+      crimeSummaryWordCount: 44,
+      summarizerEngine: "Google Gemini (Max 150 words)",
+    },
   },
 ];
 
@@ -85,18 +108,18 @@ const INITIAL_MESSAGES: DiscordChatMessage[] = [
     authorName: "Aegis",
     isBot: true,
     timestamp: "Today at 12:00 PM",
-    content: "Hello! I'm **Aegis**, your Discord server's moderation and AutoMod bot.",
+    content: "Hello! I'm **Aegis**, your Discord server's AutoMod and security sentinel.",
     embed: {
       color: "#5865F2",
-      title: "🛡️ Aegis Moderation Engine Online",
-      description: "All server defense filters are active and protecting members from phishing, raid floods, and toxic spam.",
+      title: "🛡️ Dual-Model AI AutoMod Pipeline Operational",
+      description: "All server defense filters are active and scanning incoming messages in real-time.",
       fields: [
         { name: "Server", value: "Cyberpunk Gaming Hub", inline: true },
-        { name: "Active Shard", value: "Shard #0 (19ms ping)", inline: true },
-        { name: "AutoMod Filters", value: "5/5 Filters Enabled", inline: true },
+        { name: "Moderation Brain", value: "Gemini 3.5 Flash", inline: true },
+        { name: "Crime Summarizer", value: "Google Gemini (≤150w Cap)", inline: true },
         { name: "Anti-Raid Shield", value: "Standby (Auto-Quarantine)", inline: true },
       ],
-      footer: { text: "Aegis v3.1.2 • Type /automod or /stats to inspect security configurations" },
+      footer: { text: "Aegis v3.1.2 • Test with quick prompts below or type any message" },
     },
   },
 ];
@@ -109,7 +132,7 @@ export default function App() {
   const [soundOn, setSoundOn] = useState(true);
   const [selectedLog, setSelectedLog] = useState<ModLogItem | null>(null);
   const [selectedGuild, setSelectedGuild] = useState("Cyberpunk Gaming Hub");
-  const [activeTab, setActiveTab] = useState<"all" | "dashboard" | "chat">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "dashboard" | "chat" | "lab">("all");
 
   // Fetch telemetry
   const fetchTelemetry = useCallback(async () => {
@@ -141,7 +164,6 @@ export default function App() {
       const data = await res.json();
       if (data.success && data.state) {
         setTelemetry(data.state);
-        // Post Discord embed in chat
         const isRaid = data.state.raidMode;
         const msg: DiscordChatMessage = {
           id: `cmd-${Date.now()}`,
@@ -195,7 +217,6 @@ export default function App() {
       if (data.success && data.state) {
         setTelemetry(data.state);
 
-        // Add to mod log
         const newLog: ModLogItem = {
           id: `log-${Date.now()}`,
           timestamp: "Just now",
@@ -206,10 +227,23 @@ export default function App() {
           reason: "Simulated Raid Incursion: 14 bot accounts auto-quarantined within 3 seconds",
           details: "Mass-join threshold exceeded. Anti-raid shield engaged.",
           severity: "CRITICAL",
+          aiAudit: {
+            isViolation: true,
+            violationCategory: "ANTI_RAID",
+            severity: "CRITICAL",
+            riskScore: 99,
+            recommendedAction: "TEMP_BAN",
+            moderationEngine: "Gemini 3.5 Flash",
+            ruleBreached: "Rule #4: Sudden Mass-Join Raid Spike Mitigation",
+            flaggedKeywords: ["automated mass-join", "swarm selfbot"],
+            evidenceSnippet: "14 accounts joined within 2.8s",
+            crimeSummary: "Incident Report: Coordinated automated swarm join detected across gateway shards. 14 newly generated Discord client tokens attempted simultaneous infiltration through #welcome. Gemini 3.5 Flash moderation logic triggered automated perimeter lockdown and temporary quarantine to shield guild members from mass DM spam.",
+            crimeSummaryWordCount: 46,
+            summarizerEngine: "Google Gemini (Max 150 words)",
+          },
         };
-        setModLogs((prev) => [newLog, ...prev.slice(0, 14)]);
+        setModLogs((prev) => [newLog, ...prev.slice(0, 19)]);
 
-        // Post alert in chat
         const alertMsg: DiscordChatMessage = {
           id: `raid-${Date.now()}`,
           sender: "aegis",
@@ -256,7 +290,7 @@ export default function App() {
           reason: "Manual moderation purge: 25 messages deleted",
           severity: "LOW",
         };
-        setModLogs((prev) => [purgeLog, ...prev.slice(0, 14)]);
+        setModLogs((prev) => [purgeLog, ...prev.slice(0, 19)]);
 
         const chatMsg: DiscordChatMessage = {
           id: `purge-${Date.now()}`,
@@ -291,6 +325,8 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
+          author: "ServerAdmin",
+          channel: "aegis-commands",
           history: messages.slice(-6).map((m) => ({
             sender: m.sender,
             content: m.content || m.embed?.title || "",
@@ -308,9 +344,33 @@ export default function App() {
           timestamp: "Today at " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           content: data.content,
           embed: data.embed,
+          isFlagged: data.isFlagged,
+          moderationResult: data.moderationResult,
         };
         setMessages((prev) => [...prev, botMsg]);
-        playBotResponseSound();
+
+        if (data.isFlagged && data.moderationResult) {
+          playAlertSound();
+          // Prepend to Live Mod Log Stream with full AI report
+          const newModLog: ModLogItem = {
+            id: `case-${Date.now().toString().slice(-4)}`,
+            timestamp: "Just now",
+            actionType: "AUTOMOD_BLOCK",
+            targetUser: { username: "ServerAdmin", discriminator: "1337" },
+            moderator: { username: "Aegis AutoMod (Gemini 3.5 Flash)", isBot: true },
+            channel: "aegis-commands",
+            reason: data.moderationResult.ruleBreached,
+            details: data.moderationResult.evidenceSnippet || text,
+            severity:
+              data.moderationResult.severity === "NONE"
+                ? "LOW"
+                : data.moderationResult.severity,
+            aiAudit: data.moderationResult,
+          };
+          setModLogs((prev) => [newModLog, ...prev.slice(0, 20)]);
+        } else {
+          playBotResponseSound();
+        }
 
         if (data.botState) {
           setTelemetry(data.botState);
@@ -340,7 +400,7 @@ export default function App() {
       sender: "system",
       authorName: "Moderation Audit",
       timestamp: "Just now",
-      content: `Pardoned case #${logId.replace("log-", "")}. Member sanction revoked.`,
+      content: `Pardoned case #${logId.replace("log-", "").replace("case-", "")}. Member sanction revoked.`,
     };
     setMessages((prev) => [...prev, msg]);
   };
@@ -376,6 +436,30 @@ export default function App() {
     setMessages((prev) => [...prev, msg]);
   };
 
+  const handleUpdateLogAudit = (logId: string, audit: AIModerationResult) => {
+    setModLogs((prev) =>
+      prev.map((l) => (l.id === logId ? { ...l, aiAudit: audit } : l))
+    );
+  };
+
+  const handleIncidentLoggedFromLab = (result: AIModerationResult, snippet: string) => {
+    if (result.isViolation) {
+      const newLog: ModLogItem = {
+        id: `case-${Date.now().toString().slice(-4)}`,
+        timestamp: "Just now",
+        actionType: "AUTOMOD_BLOCK",
+        targetUser: { username: "tested_subject", discriminator: "4040" },
+        moderator: { username: "Aegis AutoMod (Gemini 3.5 Flash)", isBot: true },
+        channel: "aegis-commands",
+        reason: result.ruleBreached,
+        details: snippet,
+        severity: result.severity === "NONE" ? "LOW" : result.severity,
+        aiAudit: result,
+      };
+      setModLogs((prev) => [newLog, ...prev.slice(0, 20)]);
+    }
+  };
+
   const handleToggleSound = () => {
     const next = !soundOn;
     setSoundOn(next);
@@ -385,7 +469,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0a0c14] text-slate-100 flex flex-col font-sans selection:bg-[#5865F2]/30 selection:text-white">
-      {/* Aesthetic Discord Bot Header */}
+      {/* Discord Bot Header */}
       <Header
         telemetry={telemetry}
         onToggleRaidMode={handleToggleRaidMode}
@@ -397,8 +481,8 @@ export default function App() {
         onSelectGuild={(g) => setSelectedGuild(g)}
       />
 
-      {/* View Switcher Pills */}
-      <div className="max-w-7xl mx-auto w-full px-4 pt-3 pb-1 flex items-center justify-between">
+      {/* Navigation View Switcher */}
+      <div className="max-w-7xl mx-auto w-full px-4 pt-3 pb-1 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 p-1 bg-[#121520] rounded-xl border border-slate-800/80 text-xs">
           <button
             onClick={() => {
@@ -412,8 +496,21 @@ export default function App() {
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Overview & Console</span>
-            <span className="sm:hidden">All</span>
+            <span>Overview & Console</span>
+          </button>
+          <button
+            onClick={() => {
+              playClickSound();
+              setActiveTab("lab");
+            }}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === "lab"
+                ? "bg-[#5865F2] text-white font-semibold shadow-sm"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>AI AutoMod Lab</span>
           </button>
           <button
             onClick={() => {
@@ -451,48 +548,83 @@ export default function App() {
             AutoMod Guarding {selectedGuild}
           </span>
           <span>•</span>
-          <span className="text-slate-500">Shard #0 Online</span>
+          <span className="text-slate-400">Gemini 3.5 Flash + Gemini Pipeline</span>
         </div>
       </div>
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-4">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          {/* Status Dashboard View */}
-          {(activeTab === "all" || activeTab === "dashboard") && (
-            <div
-              className={`${
-                activeTab === "all" ? "lg:col-span-7" : "lg:col-span-12"
-              } transition-all`}
-            >
-              <StatusDashboard
-                telemetry={telemetry}
-                modLogs={modLogs}
-                onToggleRule={handleToggleRule}
-                onClearLogs={() => setModLogs([])}
-                onSelectLog={(log) => setSelectedLog(log)}
-                selectedGuild={selectedGuild}
-              />
-            </div>
-          )}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-5">
+        {/* Dedicated AI AutoMod Lab View */}
+        {activeTab === "lab" && (
+          <div className="animate-fadeIn">
+            <AIAutoModLab
+              onIncidentLogged={handleIncidentLoggedFromLab}
+              selectedGuild={selectedGuild}
+            />
+          </div>
+        )}
 
-          {/* Integrated Chat Interface View */}
-          {(activeTab === "all" || activeTab === "chat") && (
-            <div
-              className={`${
-                activeTab === "all" ? "lg:col-span-5" : "lg:col-span-12"
-              } transition-all`}
-            >
-              <ChatInterface
-                messages={messages}
-                isLoading={isLoading}
-                onSendMessage={handleSendMessage}
-                onClearChat={() => setMessages([])}
-                selectedGuild={selectedGuild}
-              />
+        {/* Overview (All) or Split View */}
+        {activeTab === "all" && (
+          <div className="space-y-5 animate-fadeIn">
+            {/* Top Interactive AI AutoMod Lab */}
+            <AIAutoModLab
+              onIncidentLogged={handleIncidentLoggedFromLab}
+              selectedGuild={selectedGuild}
+            />
+
+            {/* Split: Status Dashboard + Live Chat Console */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              <div className="lg:col-span-7">
+                <StatusDashboard
+                  telemetry={telemetry}
+                  modLogs={modLogs}
+                  onToggleRule={handleToggleRule}
+                  onClearLogs={() => setModLogs([])}
+                  onSelectLog={(log) => setSelectedLog(log)}
+                  selectedGuild={selectedGuild}
+                />
+              </div>
+
+              <div className="lg:col-span-5">
+                <ChatInterface
+                  messages={messages}
+                  isLoading={isLoading}
+                  onSendMessage={handleSendMessage}
+                  onClearChat={() => setMessages([])}
+                  selectedGuild={selectedGuild}
+                />
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Dashboard-only Tab */}
+        {activeTab === "dashboard" && (
+          <div className="animate-fadeIn">
+            <StatusDashboard
+              telemetry={telemetry}
+              modLogs={modLogs}
+              onToggleRule={handleToggleRule}
+              onClearLogs={() => setModLogs([])}
+              onSelectLog={(log) => setSelectedLog(log)}
+              selectedGuild={selectedGuild}
+            />
+          </div>
+        )}
+
+        {/* Chat-only Tab */}
+        {activeTab === "chat" && (
+          <div className="animate-fadeIn max-w-4xl mx-auto">
+            <ChatInterface
+              messages={messages}
+              isLoading={isLoading}
+              onSendMessage={handleSendMessage}
+              onClearChat={() => setMessages([])}
+              selectedGuild={selectedGuild}
+            />
+          </div>
+        )}
       </main>
 
       {/* Audit Log Details Modal */}
@@ -501,6 +633,7 @@ export default function App() {
         onClose={() => setSelectedLog(null)}
         onRevokeAction={handleRevokeAction}
         onBanUser={handleBanUser}
+        onUpdateLogAudit={handleUpdateLogAudit}
       />
     </div>
   );

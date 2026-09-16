@@ -16,6 +16,10 @@ import {
   Shield,
   Clock,
   Terminal,
+  ShieldAlert,
+  Zap,
+  AlertTriangle,
+  Flame,
 } from "lucide-react";
 import { DiscordChatMessage, DiscordEmbed } from "../types";
 import { playSendSound, playBotResponseSound, playClickSound } from "../utils/audio";
@@ -28,14 +32,23 @@ interface ChatInterfaceProps {
   selectedGuild: string;
 }
 
-const SLASH_COMMANDS = [
-  { cmd: "/stats", desc: "View bot shard ping & server statistics" },
-  { cmd: "/automod", desc: "List all active AutoMod filters & triggers" },
-  { cmd: "/ban @spammer Scam & Phishing Link", desc: "Ban user & delete 24h messages" },
-  { cmd: "/mute @troll 1h Rule #2 Toxicity", desc: "Timeout member for 1 hour" },
-  { cmd: "/purge 25", desc: "Mass delete recent channel messages" },
-  { cmd: "/raidmode", desc: "Toggle server-wide anti-raid gatekeeper" },
-  { cmd: "/userinfo @suspect", desc: "Inspect user trust score & infractions" },
+const QUICK_TEST_PROMPTS = [
+  {
+    label: "🎣 Fake Nitro Phishing",
+    text: "Claim your free 3-month Discord Nitro immediately at http://fake-nitro-gift.xyz/claim @everyone!",
+  },
+  {
+    label: "🤬 Toxic Harassment",
+    text: "kys you absolute idiot go uninstall life right now, nobody wants your stupid opinion",
+  },
+  {
+    label: "🔗 Discord Invite Spam",
+    text: "Join my new server guys discord.gg/secret-giveaway-hub fast limited spots!",
+  },
+  {
+    label: "💬 Normal Chat",
+    text: "Hey everyone, how's the server doing today? Any game night planned?",
+  },
 ];
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
@@ -95,13 +108,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   };
 
-  const handleSend = async (e?: React.FormEvent) => {
+  const handleSend = async (e?: React.FormEvent, customText?: string) => {
     if (e) e.preventDefault();
-    if (!inputText.trim() || isLoading) return;
-    const text = inputText.trim();
-    setInputText("");
+    const textToSend = (customText ?? inputText).trim();
+    if (!textToSend || isLoading) return;
+
+    if (!customText) setInputText("");
     playSendSound();
-    await onSendMessage(text);
+    await onSendMessage(textToSend);
   };
 
   const handleCopy = (text: string, id: string) => {
@@ -114,7 +128,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   return (
     <div
       id="aegis-discord-chat"
-      className="rounded-xl bg-[#121520] border border-slate-800/80 flex flex-col h-[650px] shadow-xl overflow-hidden relative"
+      className="rounded-2xl bg-[#121520] border border-slate-800/80 flex flex-col h-[650px] shadow-xl overflow-hidden relative"
     >
       {/* Discord Channel Header */}
       <div className="px-4 py-3 border-b border-slate-800/80 bg-[#0e111a] flex items-center justify-between">
@@ -125,76 +139,65 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
           <div className="hidden sm:block h-4 w-[1px] bg-slate-800 mx-1" />
           <span className="text-xs text-slate-400 truncate hidden sm:inline">
-            Interactive moderation console for {selectedGuild}
+            Active AutoMod Channel • Gemini 3.5 Flash + Gemini (≤150w Summary)
           </span>
         </div>
 
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Bot Active
+            AutoMod Guard Live
           </span>
           <button
             onClick={() => {
               playClickSound();
               onClearChat();
             }}
-            title="Clear chat log"
-            className="p-1.5 rounded-lg bg-[#161b28] hover:bg-red-950/60 text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
+            title="Clear channel messages"
+            className="p-1 rounded text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
           >
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Quick Slash Commands Pill Bar */}
-      <div className="px-3 py-2 bg-[#0d0f17] border-b border-slate-800/80 overflow-x-auto flex items-center gap-1.5 scrollbar-none">
-        <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider pl-1 pr-1 flex items-center gap-1">
-          <Terminal className="w-3 h-3 text-[#5865F2]" /> SLASH:
-        </span>
-        {SLASH_COMMANDS.map((item, idx) => (
-          <button
-            key={idx}
-            onClick={() => {
-              playClickSound();
-              setInputText(item.cmd);
-              inputRef.current?.focus();
-            }}
-            title={item.desc}
-            className="text-[11px] font-mono px-2.5 py-1 rounded bg-[#161b28] hover:bg-[#202738] border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-all whitespace-nowrap cursor-pointer flex items-center gap-1"
-          >
-            <span className="text-[#5865F2] font-semibold">/</span>
-            <span>{item.cmd.split(" ")[0].replace("/", "")}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Discord Message Stream */}
-      <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-[#0f121b]">
+      {/* Message Stream */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 font-sans text-xs">
         {messages.map((msg) => {
           const isAegis = msg.sender === "aegis";
           const isSystem = msg.sender === "system";
 
+          if (isSystem) {
+            return (
+              <div
+                key={msg.id}
+                className="py-1 px-3 my-1 rounded bg-[#161b28] border border-slate-800/80 text-slate-400 text-[11px] flex items-center gap-2"
+              >
+                <Terminal className="w-3.5 h-3.5 text-slate-500" />
+                <span>{msg.content}</span>
+              </div>
+            );
+          }
+
           return (
-            <div key={msg.id} className="flex items-start gap-3 group">
+            <div
+              key={msg.id}
+              className={`flex items-start gap-3 group transition-colors rounded-lg p-1.5 -mx-1.5 hover:bg-[#141824]/60 ${
+                msg.isFlagged ? "bg-red-950/20 border-l-2 border-red-500 pl-2" : ""
+              }`}
+            >
               {/* Avatar */}
-              <div className="flex-shrink-0 mt-0.5">
-                {isAegis ? (
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#5865F2] to-indigo-700 flex items-center justify-center text-white shadow-sm">
-                    <Shield className="w-4 h-4 fill-white/30" />
-                  </div>
-                ) : isSystem ? (
-                  <div className="w-9 h-9 rounded-full bg-amber-600/80 flex items-center justify-center text-white">
-                    <Clock className="w-4 h-4" />
-                  </div>
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white font-bold text-xs">
-                    OP
-                  </div>
-                )}
+              <div
+                className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-xs shadow-sm ${
+                  isAegis
+                    ? "bg-gradient-to-br from-[#5865F2] to-indigo-700"
+                    : "bg-emerald-600"
+                }`}
+              >
+                {isAegis ? <Shield className="w-4 h-4" /> : <User className="w-4 h-4" />}
               </div>
 
-              {/* Message Header & Content */}
+              {/* Message Content Area */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-bold ${isAegis ? "text-white" : "text-emerald-400"}`}>
@@ -206,6 +209,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     </span>
                   )}
                   <span className="text-[10px] text-slate-500">{msg.timestamp}</span>
+
+                  {msg.isFlagged && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-red-950 text-red-300 border border-red-500/40 uppercase">
+                      ⚠️ AutoMod Intercept
+                    </span>
+                  )}
                 </div>
 
                 {/* Text Content */}
@@ -218,8 +227,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 {/* Discord Embed */}
                 {msg.embed && (
                   <div
-                    className="mt-2 p-3.5 rounded-lg bg-[#141824] border border-slate-800 text-xs shadow-md discord-embed-border"
-                    style={{ borderLeftColor: msg.embed.color || "#5865F2" }}
+                    className="mt-2 p-3.5 rounded-xl bg-[#141824] border border-slate-800 text-xs shadow-md"
+                    style={{ borderLeft: `4px solid ${msg.embed.color || "#5865F2"}` }}
                   >
                     {msg.embed.author && (
                       <div className="text-[11px] text-slate-400 font-semibold mb-1">
@@ -227,12 +236,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                       </div>
                     )}
                     {msg.embed.title && (
-                      <div className="font-bold text-white text-sm mb-1.5">
-                        {msg.embed.title}
+                      <div className="font-bold text-white text-sm mb-1.5 flex items-center gap-1.5">
+                        <ShieldAlert className="w-4 h-4 text-amber-400" />
+                        <span>{msg.embed.title}</span>
                       </div>
                     )}
                     {msg.embed.description && (
-                      <div className="text-slate-300 text-xs mb-2 leading-relaxed">
+                      <div className="text-slate-300 text-xs mb-2 leading-relaxed whitespace-pre-wrap">
                         {msg.embed.description}
                       </div>
                     )}
@@ -248,9 +258,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                             <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">
                               {field.name}
                             </span>
-                            <span className="text-xs text-slate-200 mt-0.5 block font-mono">
+                            <div className="text-xs text-slate-200 mt-0.5 font-mono leading-relaxed bg-slate-900/40 p-1.5 rounded border border-slate-800/80">
                               {field.value}
-                            </span>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -273,14 +283,31 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         {isLoading && (
           <div className="flex items-center gap-2 text-xs text-slate-400 italic">
             <span className="w-2 h-2 rounded-full bg-[#5865F2] animate-ping" />
-            <span>Aegis is processing command...</span>
+            <span>Aegis AutoMod is scanning payload (Claude 3.5 Sonnet + Gemini)...</span>
           </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Discord Message Input */}
+      {/* AutoMod Quick Test Action Bar */}
+      <div className="px-3 py-1.5 bg-[#0b0e16] border-t border-slate-800/80 flex items-center gap-1.5 overflow-x-auto">
+        <span className="text-[10px] font-semibold text-slate-500 uppercase flex-shrink-0">
+          AutoMod Test:
+        </span>
+        {QUICK_TEST_PROMPTS.map((p, idx) => (
+          <button
+            key={idx}
+            onClick={() => handleSend(undefined, p.text)}
+            disabled={isLoading}
+            className="text-[11px] font-medium px-2 py-0.5 rounded-lg bg-[#161b28] hover:bg-[#202738] border border-slate-700/60 hover:border-slate-500 text-slate-300 hover:text-white transition-all whitespace-nowrap cursor-pointer flex-shrink-0"
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Discord Message Input Form */}
       <form onSubmit={handleSend} className="p-3 bg-[#0e111a] border-t border-slate-800/80">
         <div className="flex items-center gap-2 bg-[#161b28] rounded-xl px-3 py-2 border border-slate-700/60 focus-within:border-[#5865F2] transition-colors">
           <button
@@ -303,7 +330,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             placeholder={
               isListening
                 ? "Listening to your voice command..."
-                : `Message #aegis-commands (Type / for commands)...`
+                : `Message #aegis-commands (AutoMod will scan in real-time)...`
             }
             className="w-full bg-transparent text-xs text-slate-100 placeholder-slate-500 focus:outline-none"
           />
@@ -337,7 +364,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </div>
 
         <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1 px-1">
-          <span>Tip: You can talk naturally or use slash commands like <code>/ban</code>, <code>/mute</code>, <code>/stats</code></span>
+          <span>AI Pipeline: Claude 3.5 Sonnet (Moderation) + Google Gemini (Crime Summary ≤150w)</span>
           <span>Aegis AutoMod Core</span>
         </div>
       </form>

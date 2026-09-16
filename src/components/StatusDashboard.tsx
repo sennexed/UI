@@ -18,6 +18,7 @@ import {
   ArrowUpRight,
   Sparkles,
   Layers,
+  Cpu,
 } from "lucide-react";
 import { BotStatusTelemetry, ModLogItem, AutoModRule } from "../types";
 import { playClickSound, playAlertSound } from "../utils/audio";
@@ -54,20 +55,41 @@ export const StatusDashboard: React.FC<StatusDashboardProps> = ({
     return log.actionType === logFilter;
   });
 
-  // Calculate sparkline
-  const maxVal = Math.max(...eventHistory, 4600);
-  const minVal = Math.min(...eventHistory, 3800);
-  const range = Math.max(maxVal - minVal, 1);
-  const svgPoints = eventHistory
-    .map((val, idx) => {
-      const x = (idx / (eventHistory.length - 1)) * 260;
-      const y = 45 - ((val - minVal) / range) * 35;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-
   return (
     <div id="aegis-status-dashboard" className="space-y-4">
+      {/* Multi-Model AI Moderation Banner */}
+      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-[#17142b] via-[#121626] to-[#0f1b26] border border-slate-700/80 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-xl bg-[#5865F2]/20 text-[#5865F2] flex-shrink-0">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-xs font-bold text-white tracking-wide uppercase">
+                Active Multi-Model AutoMod Pipeline
+              </h4>
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/40">
+                ENGAGED
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Every message is moderated by <strong>Gemini 3.5 Flash</strong> and crime incidents are summarized by <strong>Google Gemini</strong> (≤150 words).
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs">
+          <div className="px-2.5 py-1 rounded-lg bg-cyan-950/70 border border-cyan-500/40 text-cyan-200 text-[11px] font-medium flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+            <span>Gemini 3.5 Flash (Moderation)</span>
+          </div>
+          <div className="px-2.5 py-1 rounded-lg bg-sky-950/70 border border-sky-500/40 text-sky-200 text-[11px] font-medium flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+            <span>Google Gemini (≤150w Summary)</span>
+          </div>
+        </div>
+      </div>
+
       {/* 4 Clean Metric Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Card 1: Guilds Protected */}
@@ -175,7 +197,7 @@ export const StatusDashboard: React.FC<StatusDashboardProps> = ({
               <div className="flex items-center gap-2">
                 <Shield className="w-4 h-4 text-[#5865F2]" />
                 <h3 className="text-sm font-bold text-white tracking-wide">
-                  AutoMod Security Shield
+                  AutoMod Rule Enforcement
                 </h3>
               </div>
               <span className="text-xs text-slate-400">
@@ -183,7 +205,7 @@ export const StatusDashboard: React.FC<StatusDashboardProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-400 mb-3">
-              Automated heuristics intercept rule violations in milliseconds before members see them.
+              Automated rules intercept infractions before members see them.
             </p>
 
             {/* Rules List */}
@@ -230,12 +252,12 @@ export const StatusDashboard: React.FC<StatusDashboardProps> = ({
           </div>
 
           <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-            <span>Filter Engine: eBPF + Gemini ML Classifier</span>
+            <span>Filter Engine: Gemini 3.5 Flash + Gemini</span>
             <span className="text-emerald-400 font-medium">All 5 Filters Operational</span>
           </div>
         </div>
 
-        {/* Right 5 cols: Shard Health & Event Rate Sparkline */}
+        {/* Right 5 cols: Shard Health */}
         <div
           id="shards-health-card"
           className="lg:col-span-5 p-4 rounded-xl bg-[#121520] border border-slate-800/80 flex flex-col justify-between"
@@ -243,60 +265,36 @@ export const StatusDashboard: React.FC<StatusDashboardProps> = ({
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-emerald-400" />
+                <Cpu className="w-4 h-4 text-cyan-400" />
                 <h3 className="text-sm font-bold text-white tracking-wide">
-                  Gateway Shards & Activity
+                  Shard Clusters
                 </h3>
               </div>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30">
-                HEALTHY
+              <span className="text-xs text-slate-400">
+                Ping: <strong className="text-white font-mono">{telemetry?.pingMs ?? 19}ms</strong>
               </span>
             </div>
-            <p className="text-xs text-slate-400 mb-3">WebSocket heartbeat and cluster balance.</p>
+            <p className="text-xs text-slate-400 mb-3">
+              Multi-cluster WebSocket shards distributed across global Discord regions.
+            </p>
 
-            {/* Sparkline Graph */}
-            <div className="w-full h-20 bg-[#0e111a] rounded-lg border border-slate-800/80 p-2 flex flex-col justify-end overflow-hidden mb-3">
-              <svg viewBox="0 0 260 50" preserveAspectRatio="none" className="w-full h-full">
-                <defs>
-                  <linearGradient id="eventGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#5865F2" stopOpacity="0.4" />
-                    <stop offset="100%" stopColor="#5865F2" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-                <polygon points={`0,50 ${svgPoints} 260,50`} fill="url(#eventGrad)" />
-                <polyline
-                  fill="none"
-                  stroke="#5865F2"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  points={svgPoints}
-                />
-              </svg>
-              <div className="flex items-center justify-between text-[9px] font-mono text-slate-500 pt-1">
-                <span>-60s</span>
-                <span>GATEWAY DISPATCH STREAM</span>
-                <span>NOW</span>
-              </div>
-            </div>
-
-            {/* Shard list */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {telemetry?.shards.map((shard) => (
                 <div
                   key={shard.id}
-                  className="p-2 rounded-lg bg-[#161b28] border border-slate-800 flex items-center justify-between text-xs"
+                  className="p-2.5 rounded-lg bg-[#161b28] border border-slate-800 flex items-center justify-between text-xs"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
                     <div>
-                      <span className="font-semibold text-slate-200">Shard #{shard.id}</span>
-                      <span className="text-[10px] text-slate-500 ml-1.5">({shard.region})</span>
+                      <div className="font-semibold text-white">Shard #{shard.id}</div>
+                      <div className="text-[11px] text-slate-500">{shard.region}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 text-xs font-mono">
-                    <span className="text-slate-400">{shard.guildsCount.toLocaleString()} guilds</span>
-                    <span className="text-emerald-400 font-semibold">{shard.pingMs}ms</span>
+
+                  <div className="text-right">
+                    <div className="font-mono text-slate-200">{shard.guildsCount.toLocaleString()} guilds</div>
+                    <div className="text-[10px] text-emerald-400 font-mono">{shard.pingMs}ms ping</div>
                   </div>
                 </div>
               ))}
@@ -305,7 +303,7 @@ export const StatusDashboard: React.FC<StatusDashboardProps> = ({
 
           <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
             <span>Total Shards: 3</span>
-            <span className="text-[#5865F2] font-medium">Reconnection Rate: 0.00%</span>
+            <span className="text-[#5865F2] font-medium">Zero Packet Drop</span>
           </div>
         </div>
       </div>
@@ -400,11 +398,19 @@ export const StatusDashboard: React.FC<StatusDashboardProps> = ({
                       <span>Action by {item.moderator.username}</span>
                       <span>•</span>
                       <span>{item.timestamp}</span>
+                      {item.aiAudit && (
+                        <span className="text-[10px] text-sky-400 font-medium">
+                          • Gemini Crime Summary Attached ({item.aiAudit.crimeSummaryWordCount}w)
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 self-end sm:self-center">
+                  <span className="text-[10px] text-slate-400 group-hover:text-slate-200">
+                    Audit Case
+                  </span>
                   <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-white transition-colors" />
                 </div>
               </div>

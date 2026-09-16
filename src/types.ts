@@ -11,6 +11,9 @@ export interface BotStatusTelemetry {
   raidMode: boolean;
   shards: BotShard[];
   activeRules: AutoModRule[];
+  geminiModel: string;
+  moderationModel: string;
+  claudeModel?: string;
 }
 
 export interface BotShard {
@@ -31,6 +34,21 @@ export interface AutoModRule {
   action: "DELETE_AND_WARN" | "TIMEOUT_10M" | "KICK" | "TEMP_BAN";
 }
 
+export interface AIModerationResult {
+  isViolation: boolean;
+  violationCategory: "ANTI_PHISHING" | "TOXICITY_HARASSMENT" | "SPAM_BURST" | "INVITE_LINK" | "DOXXING_PRIVACY" | "ANTI_RAID" | "CLEAN";
+  severity: "NONE" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  riskScore: number; // 0 - 100
+  recommendedAction: "PASS" | "DELETE_AND_WARN" | "TIMEOUT_10M" | "KICK" | "TEMP_BAN" | "PERM_BAN";
+  moderationEngine: string; // "Gemini 3.5 Flash"
+  ruleBreached: string;
+  flaggedKeywords: string[];
+  evidenceSnippet?: string;
+  crimeSummary: string; // Summarized by Google Gemini (max 150 words)
+  crimeSummaryWordCount: number;
+  summarizerEngine: string; // "Google Gemini (Max 150 words)"
+}
+
 export interface ModLogItem {
   id: string;
   timestamp: string;
@@ -48,6 +66,7 @@ export interface ModLogItem {
   reason: string;
   details?: string;
   severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  aiAudit?: AIModerationResult;
 }
 
 export interface DiscordEmbedField {
@@ -80,4 +99,6 @@ export interface DiscordChatMessage {
   content: string;
   embed?: DiscordEmbed;
   commandUsed?: string;
+  isFlagged?: boolean;
+  moderationResult?: AIModerationResult;
 }
